@@ -1,17 +1,13 @@
-# 3D World
+# 3D Worlds
 
-Nine explorable 3D worlds behind one interface: a sidebar and gallery shell that hosts each world.
+Four explorable 3D worlds behind one interface: a sidebar and gallery shell that hosts each world.
 
-| Category | World | Source |
+| Category | World | Notes |
 |---|---|---|
-| Space | SkyStreet (map, street view, real sky) | TypeScript, MapLibre, three |
 | Space | Solar System | plain JS |
-| Places | Earth Atlas | CesiumJS from CDN, needs network |
-| Places | Walkable City | three |
-| Places | Meadowlane Village, Meadowlane Village v2 | three |
-| Buildings | House | three |
-| Nature | Creek (Blender `creek.glb` optional) | three |
-| Shopping | Orbit Market | React, three-style CSS 3D |
+| Places | Walkable City | first-person, three.js |
+| Buildings | House | three-room house and gardens |
+| Nature | Creek | forest creek; loads `creek.glb` from Blender when present |
 
 ## Run
 
@@ -23,10 +19,8 @@ Shell keys: `M` toggles the menu, `F` toggles fullscreen. Routes are hash-based 
 
 ## Layout
 
-- `index.html`, `src/shell/`: the shell (registry of worlds, gallery, sidebar, iframe stage).
+- `index.html`, `src/shell/`: the shell (world registry, gallery, sidebar, iframe stage).
 - `worlds/<id>/index.html`: one Vite page per world; the build picks them up automatically.
-- `public/`: shared static assets (SkyStreet star data, favicon).
-- `docs/`: SkyStreet notes and screenshots.
 
 ## Adding a world
 
@@ -35,3 +29,7 @@ Create `worlds/<id>/index.html` (import `three` from npm, no CDN importmap) and 
 ## Creek model
 
 `npm run creek:blender` needs Blender and writes `public/creek.glb`; without it Creek uses its built-in fallback.
+
+## Related projects
+
+SkyStreet and Earth Atlas live on as `3d-earth`, Meadowlane Village is its own project, and Orbit Market moved to the Amazon projects.
