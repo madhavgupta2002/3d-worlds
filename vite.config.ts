@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 import { existsSync, readdirSync } from 'node:fs';
 
@@ -11,7 +10,7 @@ const worlds = Object.fromEntries(
 );
 
 export default defineConfig({
-  plugins: [react()],
+  
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 1500,

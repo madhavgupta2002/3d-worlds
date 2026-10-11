@@ -12,5 +12,5 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "worlds/skystreet/src", "worlds/skystreet/dev"]
+  "include": ["src"]
 }
