@@ -9,20 +9,18 @@ app.innerHTML = `
     <button id="home" class="brand" title="All worlds"><span>3D</span> World</button>
     <nav id="nav"></nav>
     <footer>
+      <button id="fs" title="Fullscreen (F)">Fullscreen</button>
+      <button id="reload" title="Restart this world">Restart world</button>
       <button id="collapse" title="Hide menu (M)">Hide menu</button>
     </footer>
   </aside>
   <main id="stage">
     <section id="gallery"></section>
     <div id="frame-wrap" hidden>
-      <iframe id="frame" title="World" allow="fullscreen; pointer-lock; geolocation; clipboard-write"></iframe>
+      <iframe id="frame" title="World" allow="fullscreen; geolocation; clipboard-write"></iframe>
       <div id="loading" role="status">Loading…</div>
       <div id="toast"></div>
-      <div id="bar">
-        <button id="show-menu" title="Show menu (M)">Menu</button>
-        <button id="fs" title="Fullscreen (F)">Fullscreen</button>
-        <button id="reload" title="Restart this world">Restart</button>
-      </div>
+      <button id="show-menu" title="Show menu (M)">Menu</button>
     </div>
   </main>`;
 
@@ -90,6 +88,8 @@ $('reload').onclick = () => { loading.classList.remove('off'); frame.src = frame
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLElement && /input|textarea|select/i.test(e.target.tagName)) return;
   if (e.key === 'm' || e.key === 'M') document.body.classList.toggle('rail-hidden');
+  if (e.key === 'f' || e.key === 'F') $('fs').click();
 });
 
+if (innerWidth < 700) document.body.classList.add('rail-hidden');
 route();
