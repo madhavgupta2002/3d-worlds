@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Walkable City</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
+  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             background: rgba(0,0,0,.55); color: #fff; text-align: center; cursor: pointer; }
+  #overlay h1 { margin: 0 0 8px; }
+  #hud { position: fixed; left: 10px; bottom: 10px; color: #fff; font-size: 12px; opacity: .7; }
+  #cross { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; background: #fff; border-radius: 50%; opacity: .6; }
+</style>
+</head>
+<body>
+<div id="overlay"><div><h1>Walkable City</h1>
+  <p>Click to start<br>WASD move · Mouse look · Shift sprint · Space jump · Esc release</p></div></div>
+<div id="cross"></div>
+<div id="hud"></div>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+// ---------- seeded RNG so the city is stable ----------
+let seed = 1337;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const rr = (a, b) => a + rnd() * (b - a);
+
+// ---------- scene ----------
+const scene = new THREE.Scene();
+const SKY = 0x9ec8ee;
+scene.background = new THREE.Color(SKY);
+scene.fog = new THREE.Fog(SKY, 60, 380);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 800);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2d6, 1.4);
+sun.position.set(120, 200, 80);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -120, right: 120, top: 120, bottom: -120, near: 1, far: 500 });
+scene.add(sun, sun.target);
+
+// ---------- textures ----------
+function windowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#c9ccd2'; g.fillRect(0, 0, 64, 64);
+  for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
+    g.fillStyle = Math.random() < 0.25 ? '#ffe9a8' : '#2b3a4f';
+    g.fillRect(x * 32 + 5, y * 32 + 6, 22, 20);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.NearestFilter;
+  return t;
+}
+const winTex = windowTexture();
+
+function roadTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#2d2f33'; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = '#e8d34a'; g.fillRect(62, 0, 4, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// ---------- layout ----------
+const N = 6;            // blocks each direction from origin -> (2N+1)^2 blocks
+const BLOCK = 44;       // buildable block size
+const ROAD = 14;        // road width
+const STEP = BLOCK + ROAD;
+const HALF = N * STEP + STEP / 2;
+
+// ground (grass/sidewalk base) and roads
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2 + 400, HALF * 2 + 400),
+  new THREE.MeshLambertMaterial({ color: 0x4a7a44 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const asphalt = new THREE.MeshLambertMaterial({ color: 0x2d2f33 });
+const roadTex = roadTexture();
+for (let i = -N - 1; i <= N; i++) {
+  const p = i * STEP + STEP / 2;
+  const len = HALF * 2;
+  // N-S road
+  const m1 = new THREE.MeshLambertMaterial({ map: roadTex.clone() });
+  m1.map.needsUpdate = true; m1.map.repeat.set(1, len / 16);
+  const r1 = new THREE.Mesh(new THREE.PlaneGeometry(ROAD, len), m1);
+  r1.rotation.x = -Math.PI / 2; r1.position.set(p, 0.02, 0); r1.receiveShadow = true; scene.add(r1);
+  // E-W road
+  const m2 = new THREE.MeshLambertMaterial({ map: roadTex.clone() });
+  m2.map.needsUpdate = true; m2.map.repeat.set(1, len / 16);
+  const r2 = new THREE.Mesh(new THREE.PlaneGeometry(ROAD, len), m2);
+  r2.rotation.x = -Math.PI / 2; r2.rotation.z = Math.PI / 2; r2.position.set(0, 0.03, p); r2.receiveShadow = true; scene.add(r2);
+}
+// intersections (plain asphalt to hide crossing center lines)
+for (let i = -N - 1; i <= N; i++) for (let j = -N - 1; j <= N; j++) {
+  const s = new THREE.Mesh(new THREE.PlaneGeometry(ROAD, ROAD), asphalt);
+  s.rotation.x = -Math.PI / 2; s.position.set(i * STEP + STEP / 2, 0.04, j * STEP + STEP / 2); s.receiveShadow = true;
+  scene.add(s);
+}
+
+// ---------- buildings ----------
+const colliders = []; // {minX,maxX,minZ,maxZ,h}
+const wallColors = [0xd8d2c4, 0xb9c2cc, 0xc7a58a, 0x9aa5b1, 0xe0ddd6, 0x8f9aa8, 0xbfae9c];
+const wallMats = wallColors.map(c => new THREE.MeshLambertMaterial({ color: c, map: winTex }));
+const roofMat = new THREE.MeshLambertMaterial({ color: 0x555a60 });
+
+function addBuilding(cx, cz, w, d, h) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const uv = geo.attributes.uv;
+  // faces: +x,-x,+y,-y,+z,-z (4 verts each); tile windows every 4m
+  for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) {
+    const k = f * 4 + v;
+    if (f < 2) uv.setXY(k, uv.getX(k) * d / 4, uv.getY(k) * h / 4);
+    else if (f >= 4) uv.setXY(k, uv.getX(k) * w / 4, uv.getY(k) * h / 4);
+    else uv.setXY(k, 0.02, 0.02);
+  }
+  const mat = wallMats[Math.floor(rnd() * wallMats.length)];
+  const mesh = new THREE.Mesh(geo, [mat, mat, roofMat, roofMat, mat, mat]);
+  mesh.position.set(cx, h / 2, cz);
+  mesh.castShadow = mesh.receiveShadow = true;
+  scene.add(mesh);
+  colliders.push({ minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, h });
+}
+
+const treeTrunk = new THREE.MeshLambertMaterial({ color: 0x6b4a2b });
+const treeLeaf = new THREE.MeshLambertMaterial({ color: 0x2f7d3a });
+function addTree(x, z) {
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 3, 6), treeTrunk);
+  t.position.set(x, 1.5, z); t.castShadow = true;
+  const l = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2, 0), treeLeaf);
+  l.position.set(x, 4.4, z); l.castShadow = true;
+  scene.add(t, l);
+  colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4, h: 4 });
+}
+
+for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) {
+  const bx = i * STEP, bz = j * STEP;
+  const centerDist = Math.hypot(i, j) / N;            // taller downtown
+  // sidewalk slab
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(BLOCK + 2, 0.3, BLOCK + 2),
+    new THREE.MeshLambertMaterial({ color: 0x9c9c98 }));
+  slab.position.set(bx, 0.15, bz); slab.receiveShadow = true; scene.add(slab);
+
+  if (rnd() < 0.1 && (i || j)) { // park
+    const g = new THREE.Mesh(new THREE.BoxGeometry(BLOCK - 2, 0.35, BLOCK - 2),
+      new THREE.MeshLambertMaterial({ color: 0x3f8f4a }));
+    g.position.set(bx, 0.17, bz); g.receiveShadow = true; scene.add(g);
+    for (let k = 0; k < 12; k++) addTree(bx + rr(-18, 18), bz + rr(-18, 18));
+    continue;
+  }
+  // 2x2 lots
+  const lot = (BLOCK - 4) / 2;
+  for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+    const lx = bx + (a - 0.5) * (lot + 2), lz = bz + (b - 0.5) * (lot + 2);
+    const w = rr(lot * 0.6, lot), d = rr(lot * 0.6, lot);
+    const h = rr(10, 28) + Math.pow(1 - centerDist, 2) * rr(20, 110);
+    addBuilding(lx, lz, w, d, h);
+  }
+  // street trees on the corners
+  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) addTree(bx + sx * (BLOCK / 2 + 0.5) * 0.98, bz + sz * (BLOCK / 2 + 0.5) * 0.98);
+}
+
+// street lamps along roads
+const poleMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff1b8 });
+for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) {
+  const x = i * STEP + BLOCK / 2 + 1, z = j * STEP;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 6, 6), poleMat);
+  pole.position.set(x, 3, z);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), lampMat);
+  lamp.position.set(x, 6.1, z);
+  scene.add(pole, lamp);
+}
+
+// ---------- player ----------
+const controls = new PointerLockControls(camera, renderer.domElement);
+const EYE = 1.7, RADIUS = 0.5;
+camera.position.set(STEP / 2, EYE, STEP / 2 + 10); // middle of a road intersection area
+const vel = new THREE.Vector3();
+const keys = {};
+let onGround = true;
+
+const overlay = document.getElementById('overlay');
+overlay.addEventListener('click', () => controls.lock());
+controls.addEventListener('lock', () => overlay.style.display = 'none');
+controls.addEventListener('unlock', () => overlay.style.display = 'flex');
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); });
+addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function collide(pos, feetY) {
+  for (const c of colliders) {
+    if (feetY >= c.h) continue; // standing above it
+    const nx = Math.max(c.minX, Math.min(pos.x, c.maxX));
+    const nz = Math.max(c.minZ, Math.min(pos.z, c.maxZ));
+    const dx = pos.x - nx, dz = pos.z - nz;
+    const dist2 = dx * dx + dz * dz;
+    if (dist2 >= RADIUS * RADIUS) continue;
+    if (dist2 > 1e-8) {
+      const dist = Math.sqrt(dist2), push = RADIUS - dist;
+      pos.x += dx / dist * push; pos.z += dz / dist * push;
+    } else { // centre inside box: push out along the shortest axis
+      const l = pos.x - c.minX, r = c.maxX - pos.x, t = pos.z - c.minZ, b = c.maxZ - pos.z;
+      const m = Math.min(l, r, t, b);
+      if (m === l) pos.x = c.minX - RADIUS; else if (m === r) pos.x = c.maxX + RADIUS;
+      else if (m === t) pos.z = c.minZ - RADIUS; else pos.z = c.maxZ + RADIUS;
+    }
+  }
+}
+
+const hud = document.getElementById('hud');
+const clock = new THREE.Clock();
+const fwd = new THREE.Vector3(), right = new THREE.Vector3();
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (controls.isLocked) {
+    const speed = keys.ShiftLeft || keys.ShiftRight ? 12 : 6;
+    camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+    right.crossVectors(fwd, camera.up).normalize();
+    const wish = new THREE.Vector3();
+    if (keys.KeyW || keys.ArrowUp) wish.add(fwd);
+    if (keys.KeyS || keys.ArrowDown) wish.sub(fwd);
+    if (keys.KeyD || keys.ArrowRight) wish.add(right);
+    if (keys.KeyA || keys.ArrowLeft) wish.sub(right);
+    if (wish.lengthSq()) wish.normalize().multiplyScalar(speed);
+    // smooth horizontal velocity
+    const k = 1 - Math.exp(-12 * dt);
+    vel.x += (wish.x - vel.x) * k; vel.z += (wish.z - vel.z) * k;
+
+    if (keys.Space && onGround) { vel.y = 7; onGround = false; }
+    vel.y -= 22 * dt;
+
+    const p = camera.position;
+    p.x += vel.x * dt; p.z += vel.z * dt; p.y += vel.y * dt;
+
+    // ground / rooftop landing
+    let floor = 0;
+    for (const c of colliders) {
+      if (p.x > c.minX - RADIUS && p.x < c.maxX + RADIUS && p.z > c.minZ - RADIUS && p.z < c.maxZ + RADIUS
+          && p.y - EYE >= c.h - 0.6) floor = Math.max(floor, c.h);
+    }
+    if (p.y - EYE <= floor) { p.y = floor + EYE; vel.y = 0; onGround = true; } else onGround = false;
+
+    collide(p, p.y - EYE);
+    // keep inside the city bounds
+    p.x = Math.max(-HALF, Math.min(HALF, p.x)); p.z = Math.max(-HALF, Math.min(HALF, p.z));
+
+    sun.target.position.set(p.x, 0, p.z);
+    sun.position.set(p.x + 120, 200, p.z + 80);
+    hud.textContent = `x ${p.x.toFixed(0)}  z ${p.z.toFixed(0)}  y ${(p.y - EYE).toFixed(1)}`;
+  }
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>
