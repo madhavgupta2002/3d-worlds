@@ -37,8 +37,8 @@ button:hover { background: #232d4a; }
 #toast { position: absolute; left: 50%; bottom: 20px; transform: translate(-50%, 10px); opacity: 0; pointer-events: none;
   background: #0c1222e6; border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; transition: .3s; }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
-#bar { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; opacity: .35; transition: opacity .2s; }
-#bar:hover { opacity: 1; }
-#bar button { background: #0c1222cc; backdrop-filter: blur(6px); }
-body:not(.rail-hidden) #show-menu { display: none; }
-@media (max-width: 700px) { #app { grid-template-columns: 0 1fr; } #rail { display: none; } body:not(.rail-hidden) #show-menu { display: inline-block; } }
+#show-menu { display: none; position: absolute; left: 0; top: 50%; transform: translateY(-50%); z-index: 5; border-radius: 0 8px 8px 0;
+  background: #0c1222cc; backdrop-filter: blur(6px); opacity: .45; padding: 10px 6px; writing-mode: vertical-rl; }
+#show-menu:hover { opacity: 1; }
+body.rail-hidden #show-menu { display: block; }
+#rail footer { display: grid; gap: 6px; }
