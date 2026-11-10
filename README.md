@@ -1,6 +1,6 @@
 # 3D Worlds
 
-Four explorable 3D worlds behind one interface: a sidebar and gallery shell that hosts each world.
+Six explorable 3D worlds behind one interface: a sidebar and gallery shell that hosts each world.
 
 | Category | World | Notes |
 |---|---|---|
@@ -8,6 +8,8 @@ Four explorable 3D worlds behind one interface: a sidebar and gallery shell that
 | Places | Walkable City | first-person, three.js |
 | Buildings | House | three-room house and gardens |
 | Nature | Creek | forest creek; loads `creek.glb` from Blender when present |
+| Places | Boating in Hyderabad | boat sim on Hussain Sagar, Durgam Cheruvu, the Musi and a village tank; textures in `public/worlds/hyderabad-boating/assets` (re-fetch with `worlds/hyderabad-boating/tools/fetch_assets.py`) |
+| Games | Ginger Cutting Simulator | slice a ginger root; classic scripts served from `public/worlds/ginger` |
 
 ## Run
 

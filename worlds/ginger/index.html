@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ginger Cutting Simulator 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #15120f; font-family: system-ui, sans-serif; }
+  canvas { display: block; touch-action: none; cursor: none; }
+  #hud {
+    position: fixed; top: 12px; left: 12px; padding: 10px 14px; border-radius: 10px;
+    background: rgba(20,14,8,.72); color: #fbeecb; font-size: 13px; line-height: 1.55;
+    user-select: none; backdrop-filter: blur(6px);
+  }
+  #hud b { font-size: 16px; }
+  #hud button {
+    margin-top: 6px; margin-right: 4px; padding: 5px 10px; border: 0; border-radius: 6px;
+    background: #f0c75e; color: #3a2408; font-weight: 600; cursor: pointer;
+  }
+  #rank { color: #f0c75e; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; color: #fbeecb; font-size: 16px; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>Ginger Cutting Simulator</b><br>
+  Click to chop &middot; drag to set the blade angle<br>
+  Right-drag to orbit &middot; wheel to zoom<br>
+  Pieces: <span id="n">1</span> &nbsp; Cuts: <span id="cuts">0</span> &nbsp; <span id="rank">Whole root</span><br>
+  <button id="new">New ginger (R)</button><button id="snd">Sound: on</button>
+</div>
+<div id="err">Could not start WebGL in this browser.</div>
+<script src="three.min.js"></script>
+<script src="cut.js"></script>
+<script>
+const { makeGinger, splitMesh, components } = GingerCut;
+const HOVER = 1.9, GAP = 0.055, PLANE_Y = 0.45;
+
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+catch (e) { document.getElementById('err').style.display = 'grid'; throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.82;
+document.body.appendChild(renderer.domElement);
+const cv = renderer.domElement;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+const orbit = { az: 0.25, pol: 0.82, r: 9, target: new THREE.Vector3(0, 0.3, 0) };
+function placeCamera() {
+  const s = Math.sin(orbit.pol);
+  camera.position.set(orbit.target.x + orbit.r * s * Math.sin(orbit.az), orbit.target.y + orbit.r * Math.cos(orbit.pol),
+    orbit.target.z + orbit.r * s * Math.cos(orbit.az));
+  camera.lookAt(orbit.target);
+}
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize(); placeCamera();
+
+// ---------- environment (soft kitchen lighting, also gives the blade something to reflect) ----------
+function canvasTex(w, h, paint) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  paint(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+{
+  const es = new THREE.Scene();
+  const sky = canvasTex(16, 256, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, '#f1ebe2'); gr.addColorStop(0.45, '#c4b5a2'); gr.addColorStop(0.56, '#8a735c'); gr.addColorStop(1, '#3a2a1c');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  });
+  es.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.MeshBasicMaterial({ map: sky, side: THREE.BackSide })));
+  const lamp = (x, y, z, w, h, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(i, i, i * 0.92), side: THREE.DoubleSide }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0); es.add(m);
+  };
+  lamp(-14, 22, 8, 16, 10, 9); lamp(24, 10, -6, 10, 14, 5); lamp(0, 14, 28, 20, 6, 2.5);
+  const pm = new THREE.PMREMGenerator(renderer);
+  const env = pm.fromScene(es, 0.03).texture;
+  scene.environment = env; scene.background = env;
+  scene.backgroundBlurriness = 0.75; scene.backgroundIntensity = 0.3;
+}
+scene.add(new THREE.HemisphereLight(0xfff3e0, 0x3a2a1c, 0.5));
+const sun = new THREE.DirectionalLight(0xfff0dc, 2.6);
+sun.position.set(-4.5, 9, 3.5); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 26 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.025; sun.shadow.radius = 5;
+scene.add(sun);
+
+// ---------- board and counter ----------
+const wood = canvasTex(1024, 640, (g, w, h) => {
+  const planks = 7, ph = h / planks;
+  for (let p = 0; p < planks; p++) {
+    const l = 52 + Math.random() * 9, hue = 27 + Math.random() * 5;
+    g.fillStyle = `hsl(${hue},48%,${l}%)`; g.fillRect(0, p * ph, w, ph + 1);
+    for (let i = 0; i < 90; i++) {
+      const y = p * ph + Math.random() * ph, amp = 1 + Math.random() * 3, f = 0.004 + Math.random() * 0.01, o = Math.random() * 9;
+      g.strokeStyle = `hsla(${hue - 4},50%,${l - 10 - Math.random() * 16}%,${0.08 + Math.random() * 0.22})`;
+      g.lineWidth = 0.5 + Math.random() * 1.6;
+      g.beginPath();
+      for (let x = 0; x <= w; x += 16) g.lineTo(x, y + Math.sin(x * f + o) * amp);
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(50,25,8,.35)'; g.fillRect(0, p * ph, w, 1.5);
+  }
+});
+const board = new THREE.Mesh(new THREE.BoxGeometry(11.5, 0.45, 7.2), new THREE.MeshStandardMaterial({ map: wood, roughness: 0.62 }));
+board.position.y = -0.225; board.receiveShadow = true; board.castShadow = true; scene.add(board);
+const counter = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: 0x2c2b2e, roughness: 0.32, metalness: 0.1 }));
+counter.rotation.x = -Math.PI / 2; counter.position.y = -0.45; counter.receiveShadow = true; scene.add(counter);
+
+// ---------- ginger material: procedural skin + flesh, chosen per face by the `cap` attribute ----------
+const gingerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, metalness: 0, envMapIntensity: 1.0 });
+gingerMat.onBeforeCompile = sh => {
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float cap;\nvarying float vCap;\nvarying vec3 vObj;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCap = cap; vObj = position;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', `#include <common>
+      varying float vCap; varying vec3 vObj;
+      float ggHash(vec3 p){ p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float ggNoise(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(ggHash(i), ggHash(i + vec3(1,0,0)), f.x), mix(ggHash(i + vec3(0,1,0)), ggHash(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(ggHash(i + vec3(0,0,1)), ggHash(i + vec3(1,0,1)), f.x), mix(ggHash(i + vec3(0,1,1)), ggHash(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      float ggFbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * ggNoise(p); p *= 2.03; a *= 0.5; } return s / 0.9375; }`)
+    .replace('#include <color_fragment>', `#include <color_fragment>
+      float ggN1 = ggFbm(vObj * 1.4), ggN2 = ggFbm(vObj * 6.0), ggFine = ggNoise(vObj * 45.0);
+      // growth rings run around each knob
+      float ggRing = smoothstep(0.0, 0.05, abs(fract(length(vObj.xz) * 1.5 + ggN1 * 2.6) - 0.5));
+      vec3 ggSkin = mix(vec3(0.27, 0.15, 0.06), vec3(0.47, 0.29, 0.12), ggN1);
+      ggSkin *= mix(0.74, 1.0, ggRing) * (0.86 + 0.28 * ggN2) * (0.93 + 0.14 * ggFine);
+      ggSkin = mix(ggSkin, vec3(0.23, 0.13, 0.06), smoothstep(0.72, 0.9, ggN2) * 0.6); // dry scuffs
+      float ggFibre = ggNoise(vObj * 38.0), ggCloud = ggFbm(vObj * 7.0);
+      vec3 ggFlesh = mix(vec3(0.80, 0.57, 0.10), vec3(0.93, 0.74, 0.22), ggCloud);
+      ggFlesh *= 0.94 + 0.1 * ggFibre;
+      ggFlesh = mix(ggFlesh, vec3(0.97, 0.90, 0.60), smoothstep(0.72, 0.95, ggFibre) * 0.35); // pale fibre ends
+      diffuseColor.rgb = mix(ggSkin, ggFlesh, vCap);
+      float ggH = mix(ggN2 * 0.6 + ggRing * 0.45 + ggFine * 0.18, ggFibre * 0.5 + ggCloud * 0.3, vCap);`)
+    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance += ggFlesh * 0.07 * vCap; // moist flesh scatters light, never goes fully dark`)
+    .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      roughnessFactor = mix(0.74 + 0.2 * ggN2, 0.3 + 0.16 * ggFibre, vCap);`)
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      {
+        vec3 ggSx = dFdx(-vViewPosition), ggSy = dFdy(-vViewPosition);
+        vec3 ggR1 = cross(ggSy, normal), ggR2 = cross(normal, ggSx);
+        float ggDet = dot(ggSx, ggR1);
+        vec3 ggG = sign(ggDet) * (dFdx(ggH) * ggR1 + dFdy(ggH) * ggR2) * mix(0.055, 0.012, vCap);
+        normal = normalize(abs(ggDet) * normal - ggG);
+      }`);
+};
+
+// ---------- pieces ----------
+let pieces = [], cuts = 0;
+function makePiece(m, off, target, vy) {
+  const nT = m.tris.length / 4;
+  const pos = new Float32Array(nT * 9), nor = new Float32Array(nT * 9), cap = new Float32Array(nT * 3);
+  for (let t = 0; t < nT; t++) {
+    const c = m.tris[t * 4 + 3], cn = c ? m.capN[c - 1] : null;
+    for (let k = 0; k < 3; k++) {
+      const v = m.tris[t * 4 + k] * 3, o = t * 9 + k * 3;
+      pos[o] = m.pos[v]; pos[o + 1] = m.pos[v + 1]; pos[o + 2] = m.pos[v + 2];
+      if (cn) { nor[o] = cn[0]; nor[o + 1] = cn[1]; nor[o + 2] = cn[2]; }
+      else { nor[o] = m.nrm[v]; nor[o + 1] = m.nrm[v + 1]; nor[o + 2] = m.nrm[v + 2]; }
+      cap[t * 3 + k] = c ? 1 : 0;
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('cap', new THREE.BufferAttribute(cap, 1));
+  geo.computeBoundingSphere();
+  let minY = Infinity, cx = 0, cz = 0;
+  for (let i = 0; i < m.pos.length; i += 3) { cx += m.pos[i]; cz += m.pos[i + 2]; if (m.pos[i + 1] < minY) minY = m.pos[i + 1]; }
+  const nV = m.pos.length / 3;
+  const mesh = new THREE.Mesh(geo, gingerMat);
+  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.position.copy(off);
+  scene.add(mesh);
+  return { m, mesh, off: mesh.position, target, vy, minY, cx: cx / nV, cz: cz / nV };
+}
+function newGinger() {
+  for (const p of pieces) { scene.remove(p.mesh); p.mesh.geometry.dispose(); }
+  pieces = [makePiece(makeGinger(THREE, Math.random), new THREE.Vector3(), new THREE.Vector3(), 0)];
+  cuts = 0; hud();
+}
+
+// vertical cut plane through point c (world) along direction (dx, dz)
+function cutAll(c, dx, dz) {
+  const nx = -dz, nz = dx, next = [];
+  let did = false;
+  for (const p of pieces) {
+    const r = pieces.length + next.length > 1500 ? null
+      : splitMesh(THREE, p.m, c.x - p.off.x, 0, c.z - p.off.z, nx, 0, nz);
+    if (!r) { next.push(p); continue; }
+    did = true;
+    scene.remove(p.mesh); p.mesh.geometry.dispose();
+    for (const side of r) for (const comp of components(side)) {
+      if (comp.tris.length < 16) continue; // crumbs
+      next.push(makePiece(comp, p.off.clone(), p.target.clone(), p.vy));
+    }
+  }
+  pieces = next;
+  if (!did) return false;
+  for (const p of pieces) { // everything on each side of the blade shifts apart a little
+    const s = (p.cx + p.off.x - c.x) * nx + (p.cz + p.off.z - c.z) * nz > 0 ? 1 : -1;
+    p.target.x += nx * s * GAP; p.target.z += nz * s * GAP;
+  }
+  cuts++; hud();
+  return true;
+}
+
+// ---------- knife ----------
+const knife = new THREE.Group();
+{
+  const s = new THREE.Shape();
+  s.moveTo(-2.4, 0); s.lineTo(1.1, 0); s.quadraticCurveTo(2.35, 0.06, 2.7, 0.78);
+  s.lineTo(-2.4, 0.98); s.closePath();
+  const bg = new THREE.ExtrudeGeometry(s, { depth: 0.036, bevelEnabled: false });
+  bg.translate(0, 0, -0.018);
+  const blade = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: 0xd9dde2, metalness: 1, roughness: 0.2 }));
+  const bolster = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.2), new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 1, roughness: 0.3 }));
+  bolster.position.set(-2.5, 0.72, 0);
+  const hg = new THREE.CapsuleGeometry(0.17, 1.55, 6, 14); hg.rotateZ(Math.PI / 2); hg.scale(1, 1.25, 0.8);
+  const handle = new THREE.Mesh(hg, new THREE.MeshStandardMaterial({ color: 0x1b1614, roughness: 0.45 }));
+  handle.position.set(-3.45, 0.72, 0);
+  for (const m of [blade, bolster, handle]) { m.castShadow = true; knife.add(m); }
+}
+knife.position.y = HOVER; scene.add(knife);
+const K = { phase: 'hover', t: 0, dx: 0, dz: -1, cx: 0, cz: 0, tx: 0, tz: 0 };
+function aimKnife() { knife.rotation.y = -Math.atan2(K.dz, K.dx); }
+aimKnife();
+
+// ---------- input ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3();
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -PLANE_Y);
+function ground(e) {
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  return ray.ray.intersectPlane(cutPlane, hit) ? hit.clone() : null;
+}
+let drag = null, orbiting = null;
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  if (e.button === 2 || e.shiftKey) { orbiting = { x: e.clientX, y: e.clientY }; return; }
+  const g = ground(e);
+  if (g) { drag = { sx: e.clientX, sy: e.clientY, g, moved: false }; K.tx = g.x; K.tz = g.z; }
+});
+cv.addEventListener('pointermove', e => {
+  if (orbiting) {
+    orbit.az -= (e.clientX - orbiting.x) * 0.006;
+    orbit.pol = Math.min(1.45, Math.max(0.12, orbit.pol - (e.clientY - orbiting.y) * 0.006));
+    orbiting = { x: e.clientX, y: e.clientY }; placeCamera(); return;
+  }
+  const g = ground(e); if (!g) return;
+  if (drag && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 12) {
+    let dx = g.x - drag.g.x, dz = g.z - drag.g.z; const l = Math.hypot(dx, dz);
+    if (l > 0.05 && K.phase === 'hover') {
+      dx /= l; dz /= l;
+      // keep the handle on the camera side
+      if (dx * (orbit.target.x - camera.position.x) + dz * (orbit.target.z - camera.position.z) < 0) { dx = -dx; dz = -dz; }
+      K.dx = dx; K.dz = dz; drag.moved = true;
+      K.tx = (g.x + drag.g.x) / 2; K.tz = (g.z + drag.g.z) / 2;
+    }
+  } else if (!drag) { K.tx = g.x; K.tz = g.z; }
+});
+function release() {
+  if (orbiting) { orbiting = null; return; }
+  if (!drag) return;
+  drag = null;
+  if (K.phase === 'hover') { K.phase = 'down'; K.cx = K.tx; K.cz = K.tz; knife.position.x = K.cx; knife.position.z = K.cz; aimKnife(); }
+}
+cv.addEventListener('pointerup', release);
+cv.addEventListener('pointercancel', () => { drag = null; orbiting = null; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  orbit.r = Math.min(22, Math.max(4.5, orbit.r * Math.exp(e.deltaY * 0.001))); placeCamera();
+}, { passive: false });
+addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') newGinger(); });
+document.getElementById('new').onclick = newGinger;
+let soundOn = true, actx = null;
+document.getElementById('snd').onclick = e => { soundOn = !soundOn; e.target.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
+
+function chopSound(cutSomething) {
+  if (!soundOn) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const now = actx.currentTime;
+    if (cutSomething) { // crisp fibrous crunch
+      const n = Math.floor(actx.sampleRate * 0.09), buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.5);
+      const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+      f.type = 'bandpass'; f.frequency.value = 1700 + Math.random() * 900; f.Q.value = 0.7; g.gain.value = 0.45;
+      src.buffer = buf; src.connect(f).connect(g).connect(actx.destination); src.start(now);
+    }
+    const o = actx.createOscillator(), g2 = actx.createGain(); // blade meets board
+    o.type = 'sine'; o.frequency.setValueAtTime(190, now + 0.02); o.frequency.exponentialRampToValueAtTime(70, now + 0.12);
+    g2.gain.setValueAtTime(0.0001, now); g2.gain.exponentialRampToValueAtTime(0.5, now + 0.025); g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    o.connect(g2).connect(actx.destination); o.start(now); o.stop(now + 0.18);
+  } catch (e) {}
+}
+
+const RANKS = [[1, 'Whole root'], [2, 'Halved'], [4, 'Chunks'], [9, 'Sliced'], [25, 'Diced'], [70, 'Finely diced'], [180, 'Minced'], [500, 'Ginger paste']];
+function hud() {
+  document.getElementById('n').textContent = pieces.length;
+  document.getElementById('cuts').textContent = cuts;
+  let r = RANKS[0][1];
+  for (const [n, name] of RANKS) if (pieces.length >= n) r = name;
+  document.getElementById('rank').textContent = r;
+}
+
+// ---------- loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000); last = now;
+
+  if (K.phase === 'hover') {
+    const k = Math.min(1, dt * 22);
+    knife.position.x += (K.tx - knife.position.x) * k; knife.position.z += (K.tz - knife.position.z) * k;
+    knife.position.y += (HOVER - knife.position.y) * Math.min(1, dt * 10);
+    aimKnife();
+  } else if (K.phase === 'down') {
+    knife.position.y -= dt * 24;
+    if (knife.position.y <= 0.012) {
+      knife.position.y = 0.012;
+      chopSound(cutAll({ x: K.cx, z: K.cz }, K.dx, K.dz));
+      K.phase = 'hold'; K.t = 0.07;
+    }
+  } else if (K.phase === 'hold') {
+    K.t -= dt; if (K.t <= 0) K.phase = 'up';
+  } else {
+    knife.position.y += (HOVER - knife.position.y) * Math.min(1, dt * 14) + dt * 1.5;
+    if (knife.position.y >= HOVER - 0.25) K.phase = 'hover';
+  }
+
+  for (const p of pieces) {
+    const k = Math.min(1, dt * 14);
+    p.off.x += (p.target.x - p.off.x) * k; p.off.z += (p.target.z - p.off.z) * k;
+    const floor = -p.minY; // offset at which the piece's lowest point touches the board
+    if (p.off.y > floor || p.vy !== 0) {
+      p.vy -= 22 * dt; p.off.y += p.vy * dt;
+      if (p.off.y <= floor) { p.off.y = floor; p.vy = p.vy < -1.2 ? -p.vy * 0.18 : 0; }
+    }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+newGinger();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

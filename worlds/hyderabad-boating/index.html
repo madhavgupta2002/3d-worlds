@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Boating in Hyderabad — Hussain Sagar, Durgam Cheruvu, the Musi &amp; a village tank</title>
+    <style>
+      :root {
+        --ink: #e8eef0;
+        --dim: #9fb0b6;
+        --glass: rgba(10, 18, 22, 0.55);
+        --glass-2: rgba(8, 14, 18, 0.78);
+        --line: rgba(190, 215, 220, 0.16);
+        --amber: #f0b254;
+        --teal: #58c7bd;
+        --warn: #ef6a4c;
+        --radius: 14px;
+        --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #05080a;
+        color: var(--ink);
+        font-family: var(--font);
+        -webkit-font-smoothing: antialiased;
+        touch-action: none;
+      }
+      #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+      /* ------------------------------------------------------------ loading */
+      #loading {
+        position: fixed; inset: 0; z-index: 50;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 22px; text-align: center; padding: 24px;
+        background:
+          radial-gradient(1200px 700px at 50% 20%, #15303a 0%, #0a1419 45%, #05080a 100%);
+        transition: opacity 0.8s ease;
+      }
+      #loading.done { opacity: 0; pointer-events: none; }
+      #loading h1 {
+        margin: 0; font-size: clamp(26px, 5vw, 46px); font-weight: 650; letter-spacing: -0.02em;
+      }
+      #loading h1 span { color: var(--amber); }
+      #loading p { margin: 0; color: var(--dim); max-width: 62ch; line-height: 1.55; font-size: 15px; }
+      #bar { width: min(420px, 80vw); height: 4px; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; }
+      #barFill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--teal), var(--amber)); transition: width 0.25s ease; }
+      #loadLabel { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; min-height: 16px; }
+      #startBtn {
+        margin-top: 6px; padding: 13px 26px; border-radius: 99px; border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(240,178,84,0.95), rgba(226,152,52,0.95));
+        color: #1a1206; font-weight: 650; font-size: 15px; cursor: pointer; letter-spacing: 0.01em;
+        opacity: 0; transform: translateY(6px); transition: opacity .4s ease, transform .4s ease;
+      }
+      #startBtn.show { opacity: 1; transform: none; }
+      #startBtn:hover { filter: brightness(1.06); }
+      .credits { font-size: 11px; color: #5d6d73; max-width: 70ch; line-height: 1.6; }
+
+      /* ---------------------------------------------------------------- HUD */
+      #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      #hud.hidden { opacity: 0; }
+      #hud { transition: opacity .35s ease; }
+      .panel {
+        background: var(--glass); backdrop-filter: blur(14px) saturate(1.2);
+        border: 1px solid var(--line); border-radius: var(--radius);
+        box-shadow: 0 10px 32px rgba(0,0,0,0.34);
+      }
+      .hud-row { position: absolute; display: flex; gap: 10px; align-items: flex-start; }
+      #topLeft { top: 14px; left: 14px; flex-direction: column; }
+      #topRight { top: 14px; right: 14px; flex-direction: column; align-items: flex-end; }
+      #bottomLeft { bottom: 14px; left: 14px; align-items: flex-end; }
+      #bottomRight { bottom: 14px; right: 14px; flex-direction: column; align-items: flex-end; }
+      #bottomCentre { bottom: 14px; left: 50%; transform: translateX(-50%); }
+
+      #locationCard { padding: 11px 15px; min-width: 210px; }
+      #locName { font-size: 16px; font-weight: 620; letter-spacing: -0.01em; }
+      #locRegion { font-size: 11.5px; color: var(--dim); margin-top: 2px; letter-spacing: 0.02em; text-transform: uppercase; }
+      #locMeta { font-size: 11.5px; color: var(--teal); margin-top: 7px; display: flex; gap: 10px; flex-wrap: wrap; }
+      #locMeta b { color: var(--ink); font-weight: 560; }
+
+      #compassWrap { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 8px 4px; }
+      #compass { display: block; width: 320px; height: 34px; }
+      @media (max-width: 760px) { #compass { width: 180px; } }
+
+      #gauges { padding: 10px 14px; display: flex; gap: 16px; align-items: center; }
+      .readout { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
+      .readout .v { font-size: 25px; font-weight: 620; font-variant-numeric: tabular-nums; line-height: 1.05; }
+      .readout .l { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.09em; margin-top: 3px; }
+      .readout.warn .v { color: var(--warn); }
+      .bars { display: flex; flex-direction: column; gap: 7px; min-width: 128px; }
+      .barRow { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--dim); letter-spacing: 0.07em; }
+      .barRow .track { position: relative; flex: 1; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; }
+      .barRow .fill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0%; background: var(--teal); transition: none; }
+      .barRow .fill.amber { background: var(--amber); }
+      .barRow span.tag { width: 30px; }
+
+      #minimapWrap { padding: 8px; position: relative; }
+      #minimap { display: block; width: 186px; height: 186px; border-radius: 8px; image-rendering: auto; }
+      #minimapScale { position: absolute; bottom: 11px; left: 12px; font-size: 9.5px; color: rgba(232,238,240,0.75);
+        background: rgba(0,0,0,0.42); padding: 2px 5px; border-radius: 4px; letter-spacing: 0.04em; }
+      @media (max-width: 760px) { #minimap { width: 128px; height: 128px; } }
+
+      #hints { padding: 9px 13px; font-size: 11.5px; color: var(--dim); line-height: 1.75; max-width: 260px; text-align: right; }
+      #hints kbd {
+        font-family: var(--font); font-size: 10.5px; color: var(--ink); background: rgba(255,255,255,0.1);
+        border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; margin: 0 1px;
+      }
+
+      /* buttons */
+      .btnRow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; pointer-events: auto; }
+      button.chip {
+        pointer-events: auto; cursor: pointer; font-family: var(--font);
+        background: var(--glass); backdrop-filter: blur(14px); color: var(--ink);
+        border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; font-size: 12px;
+        display: flex; align-items: center; gap: 7px; letter-spacing: 0.01em;
+        transition: background .18s ease, border-color .18s ease, transform .12s ease;
+      }
+      button.chip:hover { background: rgba(28,44,52,0.78); border-color: rgba(190,215,220,0.3); }
+      button.chip:active { transform: translateY(1px); }
+      button.chip .k { font-size: 9.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 3px; }
+      button.chip.on { border-color: var(--amber); color: var(--amber); }
+
+      /* POI card */
+      #poiCard {
+        position: absolute; left: 50%; top: 68px; transform: translateX(-50%) translateY(-10px);
+        width: min(430px, 88vw); padding: 13px 16px; opacity: 0; transition: opacity .45s ease, transform .45s ease;
+      }
+      #poiCard.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      #poiName { font-size: 14px; font-weight: 620; color: var(--amber); letter-spacing: 0.01em; }
+      #poiText { font-size: 12.5px; color: var(--ink); opacity: 0.88; line-height: 1.6; margin-top: 5px; }
+      #poiDist { font-size: 10.5px; color: var(--dim); margin-top: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+      /* toasts */
+      #toasts { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex;
+        flex-direction: column; gap: 7px; align-items: center; }
+      .toast { padding: 8px 14px; font-size: 12.5px; border-radius: 99px; background: var(--glass-2);
+        border: 1px solid var(--line); animation: pop .3s ease backwards; }
+      .toast.warn { border-color: rgba(239,106,76,0.6); color: #ffd2c6; }
+      @keyframes pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+      /* ------------------------------------------------------------ overlays */
+      .overlay {
+        position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+        background: rgba(4,8,10,0.62); backdrop-filter: blur(7px); padding: 20px;
+        opacity: 1; transition: opacity .22s ease;
+      }
+      .overlay.hidden { opacity: 0; pointer-events: none; }
+      .sheet {
+        width: min(640px, 94vw); max-height: 86vh; overflow: auto; padding: 22px 24px;
+        background: var(--glass-2); border: 1px solid var(--line); border-radius: 18px;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.5); pointer-events: auto;
+      }
+      .sheet h2 { margin: 0 0 4px; font-size: 19px; font-weight: 640; }
+      .sheet h3 { margin: 22px 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--teal); }
+      .sheet p { color: var(--dim); font-size: 13px; line-height: 1.65; margin: 0 0 4px; }
+      .closeX { float: right; cursor: pointer; border: none; background: none; color: var(--dim); font-size: 20px; line-height: 1; }
+      .keys { display: grid; grid-template-columns: 112px 1fr; gap: 7px 14px; font-size: 13px; align-items: baseline; }
+      .keys div:nth-child(odd) { color: var(--amber); font-variant-numeric: tabular-nums; }
+      .keys div:nth-child(even) { color: var(--ink); opacity: 0.85; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(188px, 1fr)); gap: 10px; }
+      .card {
+        text-align: left; cursor: pointer; padding: 13px 14px; border-radius: 12px; color: var(--ink);
+        background: rgba(255,255,255,0.045); border: 1px solid var(--line); font-family: var(--font);
+        transition: background .16s ease, border-color .16s ease, transform .12s ease;
+      }
+      .card:hover { background: rgba(88,199,189,0.1); border-color: rgba(88,199,189,0.45); }
+      .card.active { border-color: var(--amber); background: rgba(240,178,84,0.1); }
+      .card .t { font-size: 13.5px; font-weight: 600; }
+      .card .s { font-size: 11.5px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
+      .rows { display: flex; flex-direction: column; gap: 14px; }
+      .row { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+      .row label { min-width: 118px; color: var(--dim); }
+      .row input[type="range"] { flex: 1; accent-color: var(--amber); }
+      .row select {
+        flex: 1; background: rgba(255,255,255,0.07); color: var(--ink); border: 1px solid var(--line);
+        border-radius: 8px; padding: 7px 9px; font-family: var(--font); font-size: 13px;
+      }
+      .segmented { display: flex; gap: 6px; flex-wrap: wrap; }
+      .segmented button {
+        cursor: pointer; font-family: var(--font); font-size: 12px; padding: 7px 11px; border-radius: 9px;
+        background: rgba(255,255,255,0.05); color: var(--ink); border: 1px solid var(--line);
+      }
+      .segmented button.active { border-color: var(--amber); color: var(--amber); background: rgba(240,178,84,0.1); }
+      .foot { margin-top: 20px; font-size: 11px; color: #5d6d73; line-height: 1.6; }
+      a { color: var(--teal); }
+
+      #photoFrame { position: fixed; inset: 0; z-index: 9; pointer-events: none; opacity: 0; transition: opacity .3s ease; }
+      #photoFrame.show { opacity: 1; }
+      #photoFrame div { position: absolute; background: rgba(255,255,255,0.55); }
+      #photoHint { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 11;
+        font-size: 11.5px; color: rgba(255,255,255,0.7); letter-spacing: 0.1em; text-transform: uppercase;
+        opacity: 0; transition: opacity .3s ease; pointer-events: none; }
+      #photoHint.show { opacity: 1; }
+
+      #fps { position: fixed; top: 14px; left: 14px; z-index: 20; font-size: 11px; color: #7fd3c9;
+        background: rgba(0,0,0,0.5); padding: 4px 7px; border-radius: 6px; font-variant-numeric: tabular-nums;
+        display: none; white-space: pre; line-height: 1.5; }
+      #fps.show { display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="loading">
+      <h1>Boating in <span>Hyderabad</span></h1>
+      <p>
+        Four places on the Deccan: the open water of <b>Hussain Sagar</b> under the Buddha statue, the granite
+        boulders of <b>Durgam Cheruvu</b>, the current of the <b>Musi</b> through the old city, and a
+        <b>village tank</b> full of lotus. Real waves, real wake, four boats.
+      </p>
+      <div id="bar"><div id="barFill"></div></div>
+      <div id="loadLabel">starting…</div>
+      <button id="startBtn">Cast off</button>
+      <div class="credits">
+        Built with three.js. Textures &amp; HDRI skies from Poly Haven (CC0); water normal map from the
+        three.js examples (MIT). Everything else — terrain, boats, landmarks, sound — generated at runtime.
+      </div>
+    </div>
+
+    <div id="hud">
+      <div class="hud-row" id="topLeft">
+        <div class="panel" id="locationCard">
+          <div id="locName">—</div>
+          <div id="locRegion">—</div>
+          <div id="locMeta">
+            <span>Boat <b id="metaBoat">—</b></span>
+            <span>Light <b id="metaSky">—</b></span>
+            <span>View <b id="metaCam">—</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="compassWrap"><canvas id="compass" width="640" height="68"></canvas></div>
+
+      <div class="hud-row" id="topRight">
+        <div class="btnRow">
+          <button class="chip" id="btnPlaces">Places <span class="k">N</span></button>
+          <button class="chip" id="btnBoats">Boats <span class="k">V</span></button>
+          <button class="chip" id="btnLight">Light <span class="k">T</span></button>
+          <button class="chip" id="btnCam">View <span class="k">C</span></button>
+        </div>
+        <div class="btnRow">
+          <button class="chip" id="btnSettings">Settings</button>
+          <button class="chip" id="btnPhoto">Photo <span class="k">P</span></button>
+          <button class="chip" id="btnSound">Sound</button>
+          <button class="chip" id="btnHelp">? <span class="k">H</span></button>
+        </div>
+      </div>
+
+      <div class="panel" id="poiCard">
+        <div id="poiName">—</div>
+        <div id="poiText">—</div>
+        <div id="poiDist">—</div>
+      </div>
+
+      <div class="hud-row" id="bottomLeft">
+        <div class="panel" id="minimapWrap">
+          <canvas id="minimap" width="372" height="372"></canvas>
+          <div id="minimapScale">—</div>
+        </div>
+      </div>
+
+      <div class="hud-row" id="bottomCentre">
+        <div class="panel" id="gauges">
+          <div class="readout"><div class="v" id="gSpeed">0</div><div class="l">km/h</div></div>
+          <div class="readout"><div class="v" id="gKnots">0</div><div class="l">knots</div></div>
+          <div class="bars">
+            <div class="barRow"><span class="tag">THR</span><div class="track"><div class="fill amber" id="gThrottle"></div></div></div>
+            <div class="barRow"><span class="tag">RUD</span><div class="track"><div class="fill" id="gRudder"></div></div></div>
+            <div class="barRow"><span class="tag">RPM</span><div class="track"><div class="fill" id="gRpm"></div></div></div>
+          </div>
+          <div class="readout" id="depthReadout"><div class="v" id="gDepth">—</div><div class="l">m under keel</div></div>
+        </div>
+      </div>
+
+      <div class="hud-row" id="bottomRight">
+        <div class="panel" id="hints">
+          <kbd>W</kbd><kbd>S</kbd> throttle · <kbd>A</kbd><kbd>D</kbd> rudder<br />
+          <kbd>Space</kbd> brake · drag to look · scroll to zoom<br />
+          <kbd>C</kbd> view · <kbd>V</kbd> boat · <kbd>T</kbd> light · <kbd>H</kbd> help
+        </div>
+      </div>
+
+      <div id="toasts"></div>
+    </div>
+
+    <div id="photoFrame">
+      <div style="left:0;right:0;top:0;height:1px"></div>
+      <div style="left:0;right:0;bottom:0;height:1px"></div>
+      <div style="top:0;bottom:0;left:0;width:1px"></div>
+      <div style="top:0;bottom:0;right:0;width:1px"></div>
+    </div>
+    <div id="photoHint">Photo mode — P to exit · R to reset the boat</div>
+    <div id="fps"></div>
+
+    <!-- overlays -->
+    <div class="overlay hidden" id="placesOverlay">
+      <div class="sheet">
+        <button class="closeX" data-close="placesOverlay">×</button>
+        <h2>Where to</h2>
+        <p>Four stretches of water around Hyderabad. Switching rebuilds the world, which takes a moment.</p>
+        <h3>Locations</h3>
+        <div class="cards" id="placeCards"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="boatsOverlay">
+      <div class="sheet">
+        <button class="closeX" data-close="boatsOverlay">×</button>
+        <h2>Boats</h2>
+        <p>Each one handles differently — mass, thrust, how much it heels and how deep it sits.</p>
+        <h3>Pick a hull</h3>
+        <div class="cards" id="boatCards"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="lightOverlay">
+      <div class="sheet">
+        <button class="closeX" data-close="lightOverlay">×</button>
+        <h2>Light &amp; weather</h2>
+        <p>Each setting swaps the HDRI sky, the sun, the haze and the colour of the water.</p>
+        <h3>Time of day</h3>
+        <div class="cards" id="skyCards"></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="settingsOverlay">
+      <div class="sheet">
+        <button class="closeX" data-close="settingsOverlay">×</button>
+        <h2>Settings</h2>
+        <h3>Quality</h3>
+        <div class="segmented" id="qualitySeg"></div>
+        <p style="margin-top:8px" id="qualityNote">—</p>
+        <h3>Camera</h3>
+        <div class="segmented" id="cameraSeg"></div>
+        <h3>Audio &amp; feel</h3>
+        <div class="rows">
+          <div class="row"><label for="volume">Volume</label><input type="range" id="volume" min="0" max="100" value="70" /></div>
+          <div class="row"><label for="waveScale">Wave height</label><input type="range" id="waveScale" min="0" max="200" value="100" /></div>
+          <div class="row"><label for="fov">Field of view</label><input type="range" id="fov" min="45" max="95" value="62" /></div>
+          <div class="row"><label for="bloom">Bloom</label><input type="range" id="bloom" min="0" max="150" value="100" /></div>
+        </div>
+        <div class="foot">
+          Assets: <a href="https://polyhaven.com" target="_blank" rel="noreferrer">Poly Haven</a> (CC0) textures and
+          HDRI skies, three.js water normals (MIT). Terrain, boats, landmarks, vegetation and all audio are
+          procedural. Landmarks are modelled from memory and proportion, not survey data.
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="helpOverlay">
+      <div class="sheet">
+        <button class="closeX" data-close="helpOverlay">×</button>
+        <h2>How to boat</h2>
+        <p>Open the throttle, steer with the rudder, and watch the depth under the keel — run onto a sandbar and you will stop.</p>
+        <h3>Controls</h3>
+        <div class="keys">
+          <div>W / S</div><div>Throttle forward and astern</div>
+          <div>A / D</div><div>Rudder left and right</div>
+          <div>Space</div><div>Brake (drag the hull down)</div>
+          <div>Mouse drag</div><div>Look around · scroll wheel zooms</div>
+          <div>C</div><div>Cycle camera: chase, helm, orbit, cinematic, free fly</div>
+          <div>V</div><div>Change boat</div>
+          <div>N</div><div>Change location</div>
+          <div>T</div><div>Time of day / weather</div>
+          <div>P</div><div>Photo mode (hides the HUD)</div>
+          <div>M</div><div>Toggle the chart</div>
+          <div>R</div><div>Reset the boat to the slipway</div>
+          <div>X</div><div>Sound the horn</div>
+          <div>E / Q</div><div>Up / down in free-fly</div>
+          <div>Shift</div><div>Fast, in free-fly</div>
+          <div>`</div><div>Performance readout</div>
+        </div>
+        <h3>On touch</h3>
+        <p>Drag on the left half of the screen to steer, the right half to set the throttle.</p>
+        <h3>What you are looking at</h3>
+        <p>
+          <b>Hussain Sagar</b> — the tank Ibrahim Quli Qutb Shah's son-in-law dug in 1563; the 18 m Buddha went up on
+          Gibraltar Rock in 1992. <b>Durgam Cheruvu</b> — granite among the oldest rock on earth, with the 2020
+          cable bridge over it. <b>The Musi</b> — Purana Pul (1578) and the Charminar (1591) above the south bank.
+          <b>The village tank</b> — the irrigation pond that every Telangana village keeps.
+        </p>
+      </div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

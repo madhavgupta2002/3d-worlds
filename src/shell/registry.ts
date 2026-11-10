@@ -1,4 +1,4 @@
-export type Category = 'Space' | 'Places' | 'Buildings' | 'Nature';
+export type Category = 'Space' | 'Places' | 'Buildings' | 'Nature' | 'Games';
 
 export interface World {
   id: string;
@@ -23,6 +23,12 @@ export const WORLDS: World[] = [
   { id: 'creek', name: 'Creek', category: 'Nature', accent: '#80cbc4',
     blurb: 'A forest creek with water, terrain and sky. Loads creek.glb from Blender when present.',
     hint: 'Drag to look around' },
+  { id: 'hyderabad-boating', name: 'Boating in Hyderabad', category: 'Places', accent: '#4fc3f7',
+    blurb: 'Boat on Hussain Sagar, Durgam Cheruvu, the Musi and a village tank.',
+    hint: 'See on-screen controls' },
+  { id: 'ginger', name: 'Ginger Cutting Simulator', category: 'Games', accent: '#ffb74d',
+    blurb: 'Slice a ginger root in 3D.',
+    hint: 'See on-screen controls' },
 ];
 
 export const byId = (id: string) => WORLDS.find((w) => w.id === id);

@@ -1,0 +1,137 @@
+{
+  "hdris": {
+    "day": {
+      "file": "hdri/day.hdr",
+      "source": "kloofendal_48d_partly_cloudy_puresky",
+      "license": "CC0"
+    },
+    "morning": {
+      "file": "hdri/morning.hdr",
+      "source": "kiara_3_morning",
+      "license": "CC0"
+    },
+    "sunset": {
+      "file": "hdri/sunset.hdr",
+      "source": "belfast_sunset_puresky",
+      "license": "CC0"
+    },
+    "night": {
+      "file": "hdri/night.hdr",
+      "source": "dikhololo_night",
+      "license": "CC0"
+    },
+    "overcast": {
+      "file": "hdri/overcast.hdr",
+      "source": "kloofendal_overcast_puresky",
+      "license": "CC0"
+    }
+  },
+  "textures": {
+    "scrub": {
+      "source": "aerial_grass_rock",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/scrub/scrub_diff.jpg",
+        "nor": "textures/scrub/scrub_nor.jpg",
+        "arm": "textures/scrub/scrub_arm.jpg"
+      }
+    },
+    "laterite": {
+      "source": "red_laterite_soil_stones",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/laterite/laterite_diff.jpg",
+        "nor": "textures/laterite/laterite_nor.jpg",
+        "arm": "textures/laterite/laterite_arm.jpg"
+      }
+    },
+    "mud": {
+      "source": "brown_mud",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/mud/mud_diff.jpg",
+        "nor": "textures/mud/mud_nor.jpg",
+        "arm": "textures/mud/mud_arm.jpg"
+      }
+    },
+    "granite": {
+      "source": "dark_rock",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/granite/granite_diff.jpg",
+        "nor": "textures/granite/granite_nor.jpg",
+        "arm": "textures/granite/granite_arm.jpg"
+      }
+    },
+    "cliff": {
+      "source": "cliff_side",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/cliff/cliff_diff.jpg",
+        "nor": "textures/cliff/cliff_nor.jpg",
+        "arm": "textures/cliff/cliff_arm.jpg"
+      }
+    },
+    "sand": {
+      "source": "coast_sand_01",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/sand/sand_diff.jpg",
+        "nor": "textures/sand/sand_nor.jpg",
+        "arm": "textures/sand/sand_arm.jpg"
+      }
+    },
+    "planks": {
+      "source": "brown_planks_09",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/planks/planks_diff.jpg",
+        "nor": "textures/planks/planks_nor.jpg",
+        "arm": "textures/planks/planks_arm.jpg"
+      }
+    },
+    "sandstone": {
+      "source": "large_sandstone_blocks",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/sandstone/sandstone_diff.jpg",
+        "nor": "textures/sandstone/sandstone_nor.jpg",
+        "arm": "textures/sandstone/sandstone_arm.jpg"
+      }
+    },
+    "concrete": {
+      "source": "brushed_concrete",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/concrete/concrete_diff.jpg",
+        "nor": "textures/concrete/concrete_nor.jpg",
+        "arm": "textures/concrete/concrete_arm.jpg"
+      }
+    },
+    "bark": {
+      "source": "bark_willow",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/bark/bark_diff.jpg",
+        "nor": "textures/bark/bark_nor.jpg",
+        "arm": "textures/bark/bark_arm.jpg"
+      }
+    },
+    "metal": {
+      "source": "rusty_metal_04",
+      "license": "CC0",
+      "maps": {
+        "diff": "textures/metal/metal_diff.jpg",
+        "nor": "textures/metal/metal_nor.jpg",
+        "arm": "textures/metal/metal_arm.jpg"
+      }
+    }
+  },
+  "water": {
+    "normals": "water/waternormals.jpg"
+  },
+  "credits": {
+    "polyhaven": "CC0 - https://polyhaven.com",
+    "three.js examples": "MIT - https://github.com/mrdoob/three.js"
+  }
+}
